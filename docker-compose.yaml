@@ -7,6 +7,12 @@ services:
     container_name: todo-api
     ports:
       - "8010:8010"
+    networks:
+      - aha-network
     env_file:
       - .env
     restart: unless-stopped
+
+networks:
+  aha-network:
+    external: true

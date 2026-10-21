@@ -4,6 +4,12 @@ services:
     container_name: nginx-lab
     ports:
       - "80:80"
+    networks:
+      - aha-network
     volumes:
       - ./html:/usr/share/nginx/html:ro
     restart: unless-stopped
+
+networks:
+  aha-network:
+    external: true

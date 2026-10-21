@@ -8,7 +8,12 @@ services:
       POSTGRES_PASSWORD: ahapassword
     ports:
       - "5432:5432"
+    networks:
+      - aha-network
     volumes:
       - postgres_data:/var/lib/postgresql/data
 volumes:
   postgres_data:
+networks:
+  aha-network:
+    external: true  
