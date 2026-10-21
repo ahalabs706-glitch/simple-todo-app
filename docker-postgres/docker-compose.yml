@@ -11,9 +11,9 @@ services:
     networks:
       - aha-network
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - aha_data:/var/lib/postgresql/data
 volumes:
-  postgres_data:
+  aha_data:
 networks:
   aha-network:
     external: true  

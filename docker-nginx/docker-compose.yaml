@@ -8,8 +8,13 @@ services:
       - aha-network
     volumes:
       - ./html:/usr/share/nginx/html:ro
+      - nginx_config:/etc/nginx/conf.d
     restart: unless-stopped
 
 networks:
   aha-network:
     external: true
+
+volumes:
+  nginx_config:
+    driver: local
