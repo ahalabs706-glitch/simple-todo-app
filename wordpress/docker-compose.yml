@@ -7,8 +7,6 @@ services:
       - "8080:80"
     networks:
       - aha-network
-    env_file:
-      - .env
     volumes:
       - aha_data:/var/www/html
     restart: unless-stopped
