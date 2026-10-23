@@ -1,0 +1,21 @@
+services:
+  wordpress:
+    image: wordpress:php8.2-apache
+    container_name: wordpress-lab
+    ports:
+    # custom port mapping for WordPress
+      - "8080:80"
+    networks:
+      - aha-network
+    env_file:
+      - .env
+    volumes:
+      - aha_data:/var/www/html
+    restart: unless-stopped
+
+networks:
+  aha-network:
+    external: true
+volumes:
+  aha_data:
+    driver: local

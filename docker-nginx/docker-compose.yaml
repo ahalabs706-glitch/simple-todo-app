@@ -1,4 +1,19 @@
+
 services:
+  nginx-config-sync:
+    image: alpine:3.22
+    volumes:
+      - ./conf:/source:ro
+      - nginx_config:/target
+    command:
+      - /bin/sh
+      - -c
+      - |
+        find /target -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        cp -a /source/. /target/
+        echo "Nginx configuration synced"
+    restart: "no"
+
   nginx:
     image: nginx:alpine
     container_name: nginx-lab
@@ -8,7 +23,10 @@ services:
       - aha-network
     volumes:
       - ./html:/usr/share/nginx/html:ro
-      - nginx_config:/etc/nginx/conf.d
+      - nginx_config:/etc/nginx/conf.d:ro
+    depends_on:
+      nginx-config-sync:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 networks:
