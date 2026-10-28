@@ -4,8 +4,8 @@ pipeline {
 
     environment {
         REGISTRY    = 'docker.io'
-        DOCKER_DEV  = 'raffiakhyari/todo-api-dev'
-        DOCKER_PROD = 'raffiakhyari/todo-api'
+        DOCKER_DEV  = 'aha706/todo-api-dev'
+        DOCKER_PROD = 'aha706/todo-api'
     }
 
     options {
