@@ -12,6 +12,7 @@ pipeline {
         timestamps()
 
         disableConcurrentBuilds()
+        
         skipDefaultCheckout(true)
 
         buildDiscarder(
