@@ -28,39 +28,26 @@ pipeline {
         // 1. Checkout
         // ==========================================
 
-        stage('Git') {
-
+        stage('Checkout') {
             steps {
-
-                step([$class: 'WsCleanup'])
-
+                cleanWs()
                 checkout scm
 
                 script {
-
                     env.AUTHOR_NAME = sh(
-                        script: "git log -1 --format=%aN ${env.GIT_COMMIT}",
+                        script: 'git log -1 --format=%aN',
                         returnStdout: true
                     ).trim()
 
                     env.COMMIT_MESSAGE = sh(
-                        script: "git log -1 --format=%B ${env.GIT_COMMIT}",
+                        script: 'git log -1 --format=%s',
                         returnStdout: true
                     ).trim()
 
-                    echo """
-                    ==========================================
-                    BUILD INFORMATION
-                    ==========================================
-
-                    Branch  : ${env.BRANCH_NAME}
-                    Commit  : ${env.GIT_COMMIT}
-                    Author  : ${env.AUTHOR_NAME}
-                    Message : ${env.COMMIT_MESSAGE}
-                    Build   : ${env.BUILD_NUMBER}
-
-                    ==========================================
-                    """
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Commit: ${env.GIT_COMMIT}"
+                    echo "Author: ${env.AUTHOR_NAME}"
+                    echo "Message: ${env.COMMIT_MESSAGE}"
                 }
             }
         }
