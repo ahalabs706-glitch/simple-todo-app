@@ -1,9 +1,7 @@
 
 services:
   todo-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: docker.io/aha706/todo-api-dev:${IMAGE_TAG}
     container_name: todo-api
     ports:
       - "8010:8010"
