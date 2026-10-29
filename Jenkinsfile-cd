@@ -137,33 +137,59 @@ pipeline {
         // 4. Deploy with Docker Compose
         // ==========================================
 
-        stage('Deploy') {
+
+        stage('Deploy to Ubuntu') {
             steps {
                 sshagent(credentials: [env.SSH_CREDENTIALS]) {
                     sh '''
                         set -eu
 
-                        echo "=========================================="
-                        echo "Deploying ${DEPLOY_IMAGE}"
-                        echo "Environment: ${DEPLOY_ENV}"
-                        echo "=========================================="
+                        echo "Image: ${IMAGE_REPO}:${IMAGE_TAG}"
 
-                        ssh ${SSH_OPTIONS} \
+                        echo "Validasi Docker Compose..."
+                        ssh -o BatchMode=yes \
+                            -o StrictHostKeyChecking=yes \
+                            -o ConnectTimeout=15 \
                             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "cd '${DEPLOY_DIR}' && \
-                            export IMAGE_REPO='${IMAGE_REPO}' && \
-                            export IMAGE_TAG='${IMAGE_TAG}' && \
-                            echo 'Pulling image: ${DEPLOY_IMAGE}' && \
-                            docker compose config --quiet && \
-                            docker compose pull && \
-                            docker compose up -d --remove-orphans && \
-                            docker compose ps"
+                            "cd '${DEPLOY_DIR}' &&
+                            IMAGE_REPO='${IMAGE_REPO}' \
+                            IMAGE_TAG='${IMAGE_TAG}' \
+                            docker compose config -q"
 
-                        echo "Deployment command completed."
+                        echo "Pull image..."
+                        ssh -o BatchMode=yes \
+                            -o StrictHostKeyChecking=yes \
+                            -o ConnectTimeout=15 \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${DEPLOY_DIR}' &&
+                            IMAGE_REPO='${IMAGE_REPO}' \
+                            IMAGE_TAG='${IMAGE_TAG}' \
+                            docker compose pull"
+
+                        echo "Deploy container..."
+                        ssh -o BatchMode=yes \
+                            -o StrictHostKeyChecking=yes \
+                            -o ConnectTimeout=15 \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${DEPLOY_DIR}' &&
+                            IMAGE_REPO='${IMAGE_REPO}' \
+                            IMAGE_TAG='${IMAGE_TAG}' \
+                            docker compose up -d --no-build"
+
+                        echo "Periksa status container..."
+                        ssh -o BatchMode=yes \
+                            -o StrictHostKeyChecking=yes \
+                            -o ConnectTimeout=15 \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${DEPLOY_DIR}' &&
+                            IMAGE_REPO='${IMAGE_REPO}' \
+                            IMAGE_TAG='${IMAGE_TAG}' \
+                            docker compose ps --all"
                     '''
                 }
             }
         }
+
 
         // ==========================================
         // 5. Verify Deployment
