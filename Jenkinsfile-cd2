@@ -1,7 +1,21 @@
 pipeline {
     agent any
 
+    parameters {
+        string(
+            name: 'IMAGE_REPO',
+            defaultValue: 'aha706/todo-api-dev',
+            description: 'Docker Hub repository yang dikirim oleh CI'
+        )
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: 'latest',
+            description: 'Tag image dari BUILD_NUMBER CI'
+        )
+    }
+
     environment {
+        REGISTRY = 'docker.io'
         DEPLOY_HOST = '13.211.77.56'
         DEPLOY_USER = 'ubuntu'
         APP_DIR = '/home/ubuntu/apps/simple-todo-app'
@@ -11,47 +25,53 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
     }
 
     stages {
-        stage('Checkout') {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.IMAGE_TAG?.trim() ||
+                        !(params.IMAGE_TAG ==~ /^[0-9]+$/)) {
+                        error('IMAGE_TAG harus berisi BUILD_NUMBER CI yang valid.')
+                    }
+
+                    if (!(params.IMAGE_REPO in [
+                        'aha706/todo-api-dev',
+                        'aha706/todo-api'
+                    ])) {
+                        error("Repository image tidak diizinkan: ${params.IMAGE_REPO}")
+                    }
+
+                    if (env.BRANCH_NAME == 'develop' &&
+                        params.IMAGE_REPO != 'aha706/todo-api-dev') {
+                        error('Branch develop hanya boleh deploy image dev.')
+                    }
+
+                    if (env.BRANCH_NAME == 'main' &&
+                        params.IMAGE_REPO != 'aha706/todo-api') {
+                        error('Branch main hanya boleh deploy image production.')
+                    }
+
+                    env.DEPLOY_IMAGE =
+                        "${params.IMAGE_REPO}:${params.IMAGE_TAG}"
+
+                    echo "Branch       : ${env.BRANCH_NAME}"
+                    echo "Deploy image : ${env.DEPLOY_IMAGE}"
+                }
+            }
+        }
+
+        stage('Checkout CD Configuration') {
             steps {
                 checkout scm
-
-                echo 'Source code berhasil di-checkout.'
-            }
-        }
-
-        stage('Validate Compose') {
-            steps {
                 sh '''
                     set -eu
-
-                    if [ -f docker-compose.yml ]; then
-                        echo "Menggunakan docker-compose.yml"
-                    elif [ -f docker-compose.yaml ]; then
-                        echo "Menggunakan docker-compose.yaml"    
-                    elif [ -f compose.yaml ]; then
-                        echo "Menggunakan compose.yaml"
-                    else
-                        echo "ERROR: File Docker Compose tidak ditemukan."
-                        exit 1
-                    fi
+                    test -f docker-compose.yml ||
+                    test -f docker-compose.yaml ||
+                    test -f compose.yaml
                 '''
-            }
-        }
-
-        stage('Test SSH Connection') {
-            steps {
-                sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
-                    sh '''
-                        set -eu
-
-                        ssh -o BatchMode=yes \
-                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "whoami && hostname && docker compose version"
-                    '''
-                }
             }
         }
 
@@ -61,41 +81,50 @@ pipeline {
                     sh '''
                         set -eu
 
-                        echo "Memeriksa koneksi SSH..."
+                        # Pilih file Compose yang tersedia di repository.
+                        if [ -f docker-compose.yml ]; then
+                            COMPOSE_FILE=docker-compose.yml
+                        elif [ -f docker-compose.yaml ]; then
+                            COMPOSE_FILE=docker-compose.yaml
+                        else
+                            COMPOSE_FILE=compose.yaml
+                        fi
 
-                        ssh -o BatchMode=yes \
-                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "docker compose version"
-
-                        echo "Mengirim source code ke server Ubuntu..."
-
+                        # Kirim hanya konfigurasi Compose.
+                        # File .env di server tidak ditimpa.
                         rsync -az \
-                            --exclude='.git/' \
-                            --exclude='node_modules/' \
-                            --exclude='.env' \
-                            --exclude='.env.*' \
-                            ./ \
+                            "$COMPOSE_FILE" \
                             "${DEPLOY_USER}@${DEPLOY_HOST}:${APP_DIR}/"
 
-                        echo "Memvalidasi konfigurasi Docker Compose..."
-
+                        echo "Validasi konfigurasi Compose..."
                         ssh -o BatchMode=yes \
                             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "cd '${APP_DIR}' && docker compose config -q"
+                            "cd '${APP_DIR}' &&
+                             IMAGE_REPO='${IMAGE_REPO}' \
+                             IMAGE_TAG='${IMAGE_TAG}' \
+                             docker compose -f '${COMPOSE_FILE}' config -q"
+
+                        echo "Pull image ${DEPLOY_IMAGE}..."
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${APP_DIR}' &&
+                             IMAGE_REPO='${IMAGE_REPO}' \
+                             IMAGE_TAG='${IMAGE_TAG}' \
+                             docker compose -f '${COMPOSE_FILE}' pull"
 
                         echo "Menjalankan deployment..."
-
                         ssh -o BatchMode=yes \
                             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "cd '${APP_DIR}' && docker compose up -d --build"
+                            "cd '${APP_DIR}' &&
+                             IMAGE_REPO='${IMAGE_REPO}' \
+                             IMAGE_TAG='${IMAGE_TAG}' \
+                             docker compose -f '${COMPOSE_FILE}' up -d --no-build"
 
-                        echo "Memeriksa status container..."
-
+                        echo "Status container:"
                         ssh -o BatchMode=yes \
                             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "cd '${APP_DIR}' && docker compose ps"
-
-                        echo "Deployment selesai."
+                            "cd '${APP_DIR}' &&
+                             docker compose -f '${COMPOSE_FILE}' ps"
                     '''
                 }
             }
@@ -104,15 +133,10 @@ pipeline {
 
     post {
         success {
-            echo 'SUCCESS: Deployment aplikasi berhasil.'
+            echo "CD SUCCESS: ${params.IMAGE_REPO}:${params.IMAGE_TAG}"
         }
-
         failure {
-            echo 'FAILED: Deployment gagal. Periksa Console Output Jenkins.'
-        }
-
-        always {
-            echo 'Pipeline selesai.'
+            echo 'CD FAILED: Periksa Console Output Jenkins.'
         }
     }
 }
