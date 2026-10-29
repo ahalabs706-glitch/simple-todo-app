@@ -190,29 +190,6 @@ pipeline {
             }
         }
 
-
-        // ==========================================
-        // 5. Verify Deployment
-        // ==========================================
-
-        stage('Verify Deployment') {
-            steps {
-                sshagent(credentials: [env.SSH_CREDENTIALS]) {
-                    sh '''
-                        set -eu
-
-                        ssh ${SSH_OPTIONS} \
-                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-                            "cd '${DEPLOY_DIR}' && \
-                            docker compose ps --all"
-
-                        echo "=========================================="
-                        echo "Deployment verification completed."
-                        echo "=========================================="
-                    '''
-                }
-            }
-        }
     }
 
     post {
