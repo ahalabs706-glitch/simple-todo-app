@@ -1,0 +1,118 @@
+pipeline {
+    agent any
+
+    environment {
+        DEPLOY_HOST = '13.211.77.56'
+        DEPLOY_USER = 'ubuntu'
+        APP_DIR = '/home/ubuntu/apps/simple-todo-app'
+        SSH_CREDENTIALS_ID = 'deploy-ssh-key'
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+
+                echo 'Source code berhasil di-checkout.'
+            }
+        }
+
+        stage('Validate Compose') {
+            steps {
+                sh '''
+                    set -eu
+
+                    if [ -f docker-compose.yml ]; then
+                        echo "Menggunakan docker-compose.yml"
+                    elif [ -f docker-compose.yaml ]; then
+                        echo "Menggunakan docker-compose.yaml"    
+                    elif [ -f compose.yaml ]; then
+                        echo "Menggunakan compose.yaml"
+                    else
+                        echo "ERROR: File Docker Compose tidak ditemukan."
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
+        stage('Test SSH Connection') {
+            steps {
+                sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
+                    sh '''
+                        set -eu
+
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "whoami && hostname && docker compose version"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Ubuntu') {
+            steps {
+                sshagent(credentials: [env.SSH_CREDENTIALS_ID]) {
+                    sh '''
+                        set -eu
+
+                        echo "Memeriksa koneksi SSH..."
+
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "docker compose version"
+
+                        echo "Mengirim source code ke server Ubuntu..."
+
+                        rsync -az \
+                            --exclude='.git/' \
+                            --exclude='node_modules/' \
+                            --exclude='.env' \
+                            --exclude='.env.*' \
+                            ./ \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}:${APP_DIR}/"
+
+                        echo "Memvalidasi konfigurasi Docker Compose..."
+
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${APP_DIR}' && docker compose config -q"
+
+                        echo "Menjalankan deployment..."
+
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${APP_DIR}' && docker compose up -d --build"
+
+                        echo "Memeriksa status container..."
+
+                        ssh -o BatchMode=yes \
+                            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                            "cd '${APP_DIR}' && docker compose ps"
+
+                        echo "Deployment selesai."
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'SUCCESS: Deployment aplikasi berhasil.'
+        }
+
+        failure {
+            echo 'FAILED: Deployment gagal. Periksa Console Output Jenkins.'
+        }
+
+        always {
+            echo 'Pipeline selesai.'
+        }
+    }
+}
